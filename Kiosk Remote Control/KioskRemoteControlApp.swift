@@ -7,6 +7,30 @@
 
 import SwiftUI
 
+struct MenuVisibilityModifier: ViewModifier {
+    @Binding var currentURL: String?
+    @Binding var errorMessage: String?
+    
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
+                Task {
+                    do {
+                        currentURL = try await KioskService.shared.fetchCurrentURL()
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
+                }
+            }
+    }
+}
+
+extension View {
+    func onMenuOpen(currentURL: Binding<String?>, errorMessage: Binding<String?>) -> some View {
+        modifier(MenuVisibilityModifier(currentURL: currentURL, errorMessage: errorMessage))
+    }
+}
+
 @main
 struct KioskRemoteControlApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -22,6 +46,7 @@ struct KioskRemoteControlApp: App {
                 currentURL: $kioskState.currentURL,
                 loadURLs: kioskState.loadKioskURLs
             )
+            .onMenuOpen(currentURL: $kioskState.currentURL, errorMessage: $kioskState.errorMessage)
         }
         .onChange(of: showInDock) { oldValue, newValue in
             appDelegate.updateDockVisibility()
